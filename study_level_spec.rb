@@ -1,99 +1,127 @@
-# == Schema Information
-#
-# Table name: study_levels
-#
-#  id            :integer          not null, primary key
-#  level_id      :integer
-#  address       :string
-#  start_at      :datetime
-#  end_at        :datetime
-#  cost          :decimal(, )
-#  description   :string
-#  article       :string
-#  city_id       :integer
-#  seats         :integer
-#  nearest_event :boolean          default(TRUE)
-#  allow_enroll  :boolean          default(TRUE)
-#  link          :string
-#  created_at      :datetime         not null
-#  updated_at      :datetime         not null
-#
-# Indexes
-#
-#  index_study_levels_on_city_id   (city_id)
-#  index_study_levels_on_level_id  (level_id)
-#
+require 'spec_helper'
 
-class StudyLevel < ApplicationRecord
-  belongs_to :city, class_name: Catalog::City
-  has_and_belongs_to_many :speakers, class_name: 'Catalog::Speaker'
-  has_many :users_levels, dependent: :destroy
-  has_many :users, through: :users_levels
-  has_many :study_queues
-  belongs_to :level, class_name: 'Catalog::Level'
+RSpec.describe StudyLevel, type: :model do
+  pending "add some examples to (or delete) #{__FILE__}"
 
-  has_many :study_level_payment_requests
+  context "db" do
+    context "indexes" do
+      it { should have_db_index(:city_id) }
+      it { should have_db_index(:level_id) }
+    end
 
-  validates :start_at, :end_at, :address, :cost, :description,
-            :article, presence: true
-
-  after_commit :add_to_sidekiq, on: :create
-  after_commit :start_notification_worker, on: :create
-
-  default_scope { order(:id) }
-
-  scope :nearest, (lambda { |level_id|
-    where('start_at >= ? AND level_id = ?', Date.today, level_id)
-        .reorder(:start_at)
-  })
-
-  scope :nearest_three, (lambda { |level_id|
-    where('start_at >= ? AND level_id = ?', Date.today, level_id)
-        .reorder(:start_at).limit(3)
-  })
-  scope :actual, (-> { where('start_at >= ?', Date.today).reorder(:start_at) })
-  scope :by_course_and_position, (lambda { |study_course_id, position|
-    joins(:level)
-        .where('study_course_id = ? AND levels.position = ?', study_course_id, position)
-  })
-
-  def payment_date(user_id)
-    users_level = users_levels.find_by(user_id: user_id)
-    order = StudyLevelOrder.find_by(users_level_id: users_level.try(:id))
-    payment_request = StudyLevelPaymentRequest.find_by(study_level_id: id, user_id: user_id)
-
-    if order.present?
-      order.try(:updated_at)
-    elsif payment_request.try(:paid?)
-      payment_request.try(:updated_at)
+    context "columns" do
+    	it { should have_db_column(:level_id).of_type(:integer) }
+      it { should have_db_column(:address).of_type(:string) }
+      it { should have_db_column(:start_at).of_type(:datetime) }
+      it { should have_db_column(:end_at).of_type(:datetime) }
+      it { should have_db_column(:cost).of_type(:decimal) }
+      it { should have_db_column(:description).of_type(:string) }
+      it { should have_db_column(:article).of_type(:string) }
+      it { should have_db_column(:city_id).of_type(:integer) }
+      it { should have_db_column(:seats).of_type(:integer) }
+      it { should have_db_column(:nearest_event).of_type(:boolean) }
+      it { should have_db_column(:allow_enroll).of_type(:boolean) }
+      it { should have_db_column(:link).of_type(:string) }
     end
   end
 
-  def legal?(user_id)
-    payment_request = StudyLevelPaymentRequest.exists?(study_level_id: id, user_id: user_id, paid: true)
+  context "attributes" do
+
+    it "has level_id" do
+      expect(build(:study_level, level_id: 1)).to have_attributes(level_id: 1)
+    end
+
+    it "has address" do
+      expect(build(:study_level, address: "test_address")).to have_attributes(address: "test_address")
+    end
+
+    it "has start_at" do
+    	now = DateTime.now
+      expect(build(:study_level, start_at: now)).to have_attributes(start_at: now)
+    end
+
+    it "has end_at" do
+    	now = DateTime.now
+      expect(build(:study_level, end_at: now)).to have_attributes(end_at: now)
+    end
+
+    it "has description" do
+      expect(build(:study_level, description: "test_decription")).to have_attributes(description: "test_decription")
+    end
+
+    it "has article" do
+      expect(build(:study_level, article: "test_article")).to have_attributes(article: "test_article")
+    end
+
+    it "has city_id" do
+      expect(build(:study_level, city_id: 1)).to have_attributes(city_id: 1)
+    end
+
+    it "has seats" do
+      expect(build(:study_level, seats: 1)).to have_attributes(seats: 1)
+    end
+
+    it "has nearest_event" do
+      expect(build(:study_level, nearest_event: true)).to have_attributes(nearest_event: true)
+    end
+
+    it "has allow_enroll" do
+      expect(build(:study_level, allow_enroll: true)).to have_attributes(allow_enroll: true)
+    end
+
+    it "has link" do
+      expect(build(:study_level, link: "test")).to have_attributes(link: "test")
+    end
   end
 
-  def remaining_seats
-    seats - users_levels.where(study_status: %i(paid payment_requested)).count if seats.present?
+  context "validation" do
+
+    let(:study_level) { build(:study_level, level_id: 1) }
+
+    it "requires start_at" do
+      expect(study_level).to validate_presence_of(:start_at)
+    end
+
+    it "requires end_at" do
+      expect(study_level).to validate_presence_of(:end_at)
+    end
+
+    it "requires address" do
+      expect(study_level).to validate_presence_of(:address)
+    end
+
+    it "requires cost" do
+      expect(study_level).to validate_presence_of(:cost)
+    end
+
+    it "requires description" do
+      expect(study_level).to validate_presence_of(:description)
+    end
+
+
+    it "requires article" do
+      expect(study_level).to validate_presence_of(:article)
+    end
   end
 
-  def add_to_sidekiq
-    StudyLevelEnrollWorker.perform_at(end_at, id)
-  end
+  
+  context "scopes" do
 
-  def start_notification_worker
-    scheduled_start = (Catalog::StudyLevelsNotification.first.try(:scheduled_start) || 0).day
-    date = start_at - scheduled_start
+  	describe ".nearest"
 
-    StudyLevelsNotificationWorker.perform_at(date, id)
-  end
+  	it "returns nearest study_level array for level_id" do
+  		level_1 = create(:level)
+  		level_2 = create(:level)
 
-  def display_name
-    article || level.try(:title)
-  end
+  		StudyLevel.skip_callback(:commit, :after, :add_to_sidekiq)
+  		StudyLevel.skip_callback(:commit, :after, :start_notification_worker)
 
-  def not_allow_enroll?
-    !allow_enroll?
+      study_level_1 = create(:study_level, level: level_1, start_at: DateTime.now + 3.days)
+      study_level_2 = create(:study_level, level: level_1, start_at: DateTime.now + 2.days)
+      study_level_3 = create(:study_level, level: level_1, start_at: DateTime.now + 1.days)
+      study_level_4 = create(:study_level, level: level_2, start_at: DateTime.now + 3.days)
+
+      expect(StudyLevel.nearest(level_1.id)).to match_array [study_level_3, study_level_2, study_level_1]
+    end
   end
 end
-
